@@ -4971,7 +4971,7 @@ function renderTelaAnaliseExterna(tokenOuPayload){
           nomeResponsavel: nome,
           observacoesGerais: document.getElementById('waGestorObs').value.trim(),
         };
-        enviarRespostaAnaliseExterna(a, token, respostaObj, modoTeste);
+        enviarRespostaAnaliseExterna(a, respostaObj, modoTeste);
       };
     });
     return;
@@ -5014,12 +5014,12 @@ function renderTelaAnaliseExterna(tokenOuPayload){
       nomeResponsavel: nome,
       observacoesGerais: document.getElementById('waObsGerais').value.trim(),
     };
-    enviarRespostaAnaliseExterna(a, token, respostaObj, modoTeste);
+    enviarRespostaAnaliseExterna(a, respostaObj, modoTeste);
   };
 }
 /* -- Envia a resposta: tenta automático via Apps Script (se configurado no link),
    se não der, cai no código pra copiar/colar. -- */
-async function enviarRespostaAnaliseExterna(a, token, respostaObj, modoTeste){
+async function enviarRespostaAnaliseExterna(a, respostaObj, modoTeste){
   if(modoTeste){
     responderAnaliseWhatsApp(a.token, respostaObj);
     return;
