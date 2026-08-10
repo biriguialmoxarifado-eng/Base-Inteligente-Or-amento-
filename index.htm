@@ -4230,6 +4230,7 @@ function criarRascunhoAnaliseWa(){
     camposPersonalizados: [],
     prazo: formatarDatetimeLocal(prazoPadrao), // pré-preenchido: 7 dias à frente, 17h — evita esquecer a hora e criar link já expirado
     itensManualTexto: '',
+    itensBuscados: [], // itens adicionados via busca na Base de Itens (modo manual)
   };
 }
 /* Coleta os orçamentos já lançados pra uma solicitação (fornecedor, valores, prazos, itens) —
@@ -4239,7 +4240,7 @@ function coletarOrcamentosRecebidos(solicId){
   return orcamentos.map(o=>{
     const itensOrc = state.itensOrcamento.filter(io=>io.orcamentoId===o.id);
     return {
-      fornecedorNome: fornecedorNome(o.fornecedorId),
+      id: o.id, fornecedorId: o.fornecedorId, fornecedorNome: fornecedorNome(o.fornecedorId),
       numero: o.numero||'', data: o.data||'', validade: o.validade||'',
       valorProdutos: o.valorProdutos||0, frete: o.frete||0, desconto: o.desconto||0, total: o.total||0,
       prazoFaturamento: o.prazoFaturamento||'', prazoEntrega: o.prazoEntrega||'', condicaoPagamento: o.condicaoPagamento||'',
@@ -4385,18 +4386,76 @@ function renderWaOrigemDetalhe(){
       renderWaPreview(d);
     };
   }else{
+    if(!d.itensBuscados) d.itensBuscados = [];
     el.innerHTML = `
-      <label>Itens (um por linha: descrição, quantidade, unidade)</label>
-      <textarea id="waItensManual" rows="4" style="width:100%;margin-top:6px;" placeholder="Tubo PVC 100mm, 50, UN">${d.itensManualTexto}</textarea>`;
-    document.getElementById('waItensManual').oninput = (e)=>{
-      d.itensManualTexto = e.target.value;
-      d.itens = e.target.value.split('\n').filter(l=>l.trim()).map(l=>{
+      <label>Buscar item já cadastrado na Base de Itens</label>
+      <input type="text" id="waBuscaItemBase" placeholder="Digite parte da descrição..." style="width:100%;margin-top:6px;">
+      <div id="waResultadosBuscaItem" style="margin-top:6px;"></div>
+
+      <div id="waItensBuscadosLista" style="margin-top:10px;"></div>
+
+      <label style="margin-top:14px;display:block;">Ou digite outros itens manualmente (um por linha: descrição, quantidade, unidade)</label>
+      <textarea id="waItensManual" rows="3" style="width:100%;margin-top:6px;" placeholder="Tubo PVC 100mm, 50, UN">${d.itensManualTexto}</textarea>`;
+
+    const recalcular = ()=>{
+      const doTexto = (d.itensManualTexto||'').split('\n').filter(l=>l.trim()).map(l=>{
         const partes = l.split(',').map(p=>p.trim());
         return { descricao: partes[0]||'', quantidade: partes[1]||'', unidade: partes[2]||'' };
       });
+      d.itens = [...d.itensBuscados.map(i=>({ descricao:i.descricao, quantidade:i.quantidade, unidade:i.unidade||'' })), ...doTexto];
       renderWaPreview(d);
     };
+
+    document.getElementById('waBuscaItemBase').oninput = (e)=>{
+      const q = normalize(e.target.value);
+      const resultadosEl = document.getElementById('waResultadosBuscaItem');
+      if(!q || q.length<2){ resultadosEl.innerHTML=''; return; }
+      const encontrados = state.itens.filter(i=> normalize(i.descricao).includes(q)).slice(0,6);
+      resultadosEl.innerHTML = encontrados.length ? encontrados.map(i=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border:1px solid var(--line-soft);border-radius:6px;margin-bottom:4px;font-size:12px;">
+          <div>${i.descricao} <span class="mono" style="color:var(--ink-soft);">— ref. ${fmtMoney(i.valorBase)}/${i.unidade||'un'}</span></div>
+          <button class="btn btn-ghost btn-sm wa-add-item-busca" data-id="${i.id}">+ Adicionar</button>
+        </div>`).join('') : `<div style="font-size:11.5px;color:var(--ink-soft);">Nenhum item encontrado com esse termo.</div>`;
+      resultadosEl.querySelectorAll('.wa-add-item-busca').forEach(btn=>{
+        btn.onclick = ()=>{
+          const item = state.itens.find(i=>i.id===Number(btn.dataset.id));
+          if(item && !d.itensBuscados.some(x=>x.id===item.id)){
+            d.itensBuscados.push({ id:item.id, descricao:item.descricao, quantidade:item.quantidade, unidade:item.unidade, valorBase:item.valorBase });
+          }
+          document.getElementById('waBuscaItemBase').value = '';
+          resultadosEl.innerHTML = '';
+          renderWaItensBuscadosLista();
+          recalcular();
+        };
+      });
+    };
+    document.getElementById('waItensManual').oninput = (e)=>{ d.itensManualTexto = e.target.value; recalcular(); };
+    renderWaItensBuscadosLista();
+    recalcular();
   }
+}
+function renderWaItensBuscadosLista(){
+  const d = novaAnaliseWaDraft;
+  const el = document.getElementById('waItensBuscadosLista');
+  if(!el) return;
+  if(!d.itensBuscados || !d.itensBuscados.length){ el.innerHTML=''; return; }
+  el.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">Itens da base adicionados:</div>` +
+    d.itensBuscados.map(i=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--copper-soft);border-radius:6px;margin-bottom:4px;font-size:12px;">
+        <div>${i.descricao} <span class="mono" style="color:var(--ink-soft);">(${i.quantidade} ${i.unidade||''})</span></div>
+        <button class="btn btn-ghost btn-sm" onclick="removerItemBuscadoWa(${i.id})">✕</button>
+      </div>`).join('');
+}
+function removerItemBuscadoWa(itemId){
+  const d = novaAnaliseWaDraft;
+  d.itensBuscados = d.itensBuscados.filter(i=>i.id!==itemId);
+  renderWaItensBuscadosLista();
+  const doTexto = (d.itensManualTexto||'').split('\n').filter(l=>l.trim()).map(l=>{
+    const partes = l.split(',').map(p=>p.trim());
+    return { descricao: partes[0]||'', quantidade: partes[1]||'', unidade: partes[2]||'' };
+  });
+  d.itens = [...d.itensBuscados.map(i=>({ descricao:i.descricao, quantidade:i.quantidade, unidade:i.unidade||'' })), ...doTexto];
+  renderWaPreview(d);
 }
 function renderWaCamposPersonalizados(){
   const d = novaAnaliseWaDraft;
@@ -5002,6 +5061,44 @@ function responderAnaliseWhatsApp(token, resposta){
   if(!a) return;
   a.resposta = { ...resposta, respondidoEm: new Date().toISOString() };
   registerLog('Análise WhatsApp', 'Resposta recebida', a.titulo, { origem: resposta.nomeResponsavel });
+
+  // Se foi uma APROVAÇÃO e essa análise veio de uma solicitação real, fecha o ciclo
+  // inteiro: marca a solicitação como decidida no sistema principal — isso já fecha
+  // sozinho qualquer outro link de "Análise via WhatsApp" ligado à mesma solicitação
+  // (a checagem de status já olha pra decisaoAprovacao da solicitação).
+  if(resposta.tipo==='aprovacao' && a.origemTipo==='solicitacao' && a.origemId){
+    const solic = state.solicitacoes.find(s=>s.id===a.origemId);
+    if(solic && !solic.decisaoAprovacao){
+      const dataDecisao = new Date().toLocaleString('pt-BR');
+      solic.decisaoAprovacao = { status: 'Aprovado', quem: resposta.nomeResponsavel, data: dataDecisao };
+      registerLog('Aprovação', 'Aprovado via Análise WhatsApp', resposta.fornecedorAprovado+' — '+solic.codigo, {
+        motivo: resposta.observacoesGerais||'', origem: resposta.nomeResponsavel,
+      });
+
+      // Também registra no Histórico de Análises do Comparador, pra ficar tudo
+      // visível no mesmo lugar que as aprovações feitas por dentro do sistema.
+      const valorBaseTotal = state.itens.filter(i=>solic.itemIds.includes(i.id)).reduce((s,i)=>s+(Number(i.valorBase)||0),0);
+      const orcamentoAprovadoSnapshot = (a.orcamentosRecebidos||[]).find(o=>o.fornecedorNome===resposta.fornecedorAprovado);
+      const resultados = (a.orcamentosRecebidos||[]).map(o=>({
+        orcamentoId: o.id, fornecedorId: o.fornecedorId, total: o.total,
+        detalhes: [], desqualificado:false, motivosDesqualificacao:[],
+        aderencia: (orcamentoAprovadoSnapshot && o.id===orcamentoAprovadoSnapshot.id) ? 100 : 0,
+        cobertura: 100,
+      }));
+      state.analises.push({
+        id: state.nextAnaliseId++,
+        solicitacaoIds: [solic.id],
+        data: dataDecisao,
+        criteriosUsados: [], // aprovação direta via link — não passou pelo motor de critérios/pesos
+        resultados,
+        recomendadoOrcamentoId: orcamentoAprovadoSnapshot ? orcamentoAprovadoSnapshot.id : null,
+        recomendadoOriginalOrcamentoId: null,
+        valorBaseTotal,
+        ignorouObrigatorios: false,
+        decisao: { status:'Aprovado', quem: resposta.nomeResponsavel, data: dataDecisao, justificativa: resposta.observacoesGerais||'(aprovado via Análise via WhatsApp)' },
+      });
+    }
+  }
   saveState();
   renderConfirmacaoAnaliseWa(a);
 }
