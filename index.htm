@@ -4093,14 +4093,49 @@ function b64DecodeUnicode(str){
 const URL_PUBLICA_KEY = 'bio_url_publica_sistema';
 function getUrlPublicaSistema(){ return (localStorage.getItem(URL_PUBLICA_KEY) || '').trim(); }
 function setUrlPublicaSistema(url){ localStorage.setItem(URL_PUBLICA_KEY, url.trim()); }
+/* Endereço do Google Apps Script — recebe as aprovações feitas pelo link e devolve
+   quando o sistema perguntar. Opcional: sem isso, cai no modo "código pra colar". */
+const URL_APPS_SCRIPT_KEY = 'bio_url_apps_script';
+function getUrlAppsScript(){ return (localStorage.getItem(URL_APPS_SCRIPT_KEY) || '').trim(); }
+function setUrlAppsScript(url){ localStorage.setItem(URL_APPS_SCRIPT_KEY, url.trim()); }
+/* Busca as respostas guardadas na planilha do Apps Script e registra as que faltam —
+   é isso que substitui o "código pra colar" quando o Apps Script está configurado. */
+async function buscarRespostasAppsScript(){
+  const url = getUrlAppsScript();
+  if(!url){ toast('Configure o endereço do Apps Script primeiro.'); return; }
+  toast('Buscando respostas...');
+  try{
+    const resp = await fetch(url, { method:'GET' });
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const linhas = await resp.json();
+    let novas = 0;
+    (Array.isArray(linhas)?linhas:[]).forEach(payload=>{
+      if(!payload || !payload.tk) return;
+      const a = state.analisesWhatsApp.find(x=>x.token===payload.tk);
+      if(a && !a.resposta){
+        const { tk, respondidoEm, ...respostaObj } = payload;
+        responderAnaliseWhatsApp(a.token, respostaObj);
+        novas++;
+      }
+    });
+    if(novas>0){ toast(novas+' resposta(s) nova(s) importada(s)!'); }
+    else{ toast('Nenhuma resposta nova encontrada.'); }
+    renderTelaAnaliseInterna();
+  }catch(err){
+    toast('Não consegui buscar — confira o endereço configurado no Apps Script.');
+    console.warn(err);
+  }
+}
 /* Monta o link público de verdade — os dados da análise vão embutidos no próprio link
    (não dependem de localStorage), então funcionam em qualquer aparelho, DESDE QUE haja
    um endereço público real por trás (configurado abaixo, ou o próprio endereço atual). */
 function gerarLinkPublicoAnalise(a){
+  const urlAppsScript = getUrlAppsScript();
   const payload = {
     tk: a.token, t:a.titulo, r:a.referencia, d:a.descricao, fn:a.fornecedorNome,
     itens:a.itens, campos:a.camposSolicitados, camposP:a.camposPersonalizados,
     prazo:a.prazo, criadoEm:a.criadoEm, orc:a.orcamentosRecebidos||[],
+    as: urlAppsScript || undefined, // endereço do Apps Script embutido, pra resposta poder voltar automática de qualquer aparelho
   };
   const b64 = b64EncodeUnicode(JSON.stringify(payload));
   const urlConfigurada = getUrlPublicaSistema();
@@ -4154,6 +4189,7 @@ function renderHistoricoAnalisesWhatsApp(){
   const taxaResposta = linksGerados ? Math.round(respondidas/linksGerados*100) : 0;
 
   const urlPublicaAtual = getUrlPublicaSistema();
+  const urlAppsScriptAtual = getUrlAppsScript();
   document.getElementById('content').innerHTML = `
     <div class="phase-note">
       <span>ℹ</span>
@@ -4168,6 +4204,20 @@ function renderHistoricoAnalisesWhatsApp(){
             <input type="text" id="waUrlPublica" placeholder="https://seuusuario.github.io/base-orcamentos/" value="${urlPublicaAtual}" style="width:100%;margin-top:6px;">
           </div>
           <button class="btn btn-primary btn-sm" id="btnSalvarUrlPublica">Salvar</button>
+        </div>
+      </div>
+    </section>
+    <section class="block">
+      <div class="block-head"><h2>Recebimento automático de aprovações (opcional)</h2><span class="note">Google Apps Script — grátis</span></div>
+      <div class="card">
+        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Configure isso pra não precisar mais copiar/colar código de aprovação — a resposta chega sozinha quando você clicar em "🔄 Buscar respostas".</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:240px;">
+            <label>URL do Web App do Google Apps Script</label>
+            <input type="text" id="waUrlAppsScript" placeholder="https://script.google.com/macros/s/.../exec" value="${urlAppsScriptAtual}" style="width:100%;margin-top:6px;">
+          </div>
+          <button class="btn btn-primary btn-sm" id="btnSalvarUrlAppsScript">Salvar</button>
+          <button class="btn btn-accent btn-sm" id="btnBuscarRespostasWa">🔄 Buscar respostas</button>
         </div>
       </div>
     </section>
@@ -4214,6 +4264,12 @@ function renderHistoricoAnalisesWhatsApp(){
     toast('Endereço público salvo. Os próximos links já vão usar ele.');
     renderHistoricoAnalisesWhatsApp();
   };
+  document.getElementById('btnSalvarUrlAppsScript').onclick = ()=>{
+    setUrlAppsScript(document.getElementById('waUrlAppsScript').value);
+    toast('Endereço do Apps Script salvo.');
+    renderHistoricoAnalisesWhatsApp();
+  };
+  document.getElementById('btnBuscarRespostasWa').onclick = ()=> buscarRespostasAppsScript();
   document.getElementById('btnNovaAnaliseWa').onclick = ()=>{ novaAnaliseWaDraft = criarRascunhoAnaliseWa(); analiseWaSubView='nova'; renderTelaAnaliseInterna(); };
   document.getElementById('btnDemoAnaliseWa').onclick = ()=> criarAnaliseDemonstracao();
 }
@@ -4811,6 +4867,7 @@ function renderTelaAnaliseExterna(tokenOuPayload){
       fornecedorNome: tokenOuPayload.fn, itens: tokenOuPayload.itens||[], camposSolicitados: tokenOuPayload.campos||[],
       camposPersonalizados: tokenOuPayload.camposP||[], prazo: tokenOuPayload.prazo, criadoEm: tokenOuPayload.criadoEm,
       orcamentosRecebidos: tokenOuPayload.orc||[], desativado:false, resposta:null, _somentePayload:true,
+      urlAppsScript: tokenOuPayload.as || '',
     };
   }
   const content = document.getElementById('content');
@@ -4914,12 +4971,7 @@ function renderTelaAnaliseExterna(tokenOuPayload){
           nomeResponsavel: nome,
           observacoesGerais: document.getElementById('waGestorObs').value.trim(),
         };
-        if(modoTeste){
-          responderAnaliseWhatsApp(a.token, respostaObj);
-        }else{
-          const codigoResposta = b64EncodeUnicode(JSON.stringify({ tk:a.token, ...respostaObj, respondidoEm:new Date().toISOString() }));
-          renderTelaCodigoRespostaWa(a, codigoResposta);
-        }
+        enviarRespostaAnaliseExterna(a, token, respostaObj, modoTeste);
       };
     });
     return;
@@ -4962,14 +5014,49 @@ function renderTelaAnaliseExterna(tokenOuPayload){
       nomeResponsavel: nome,
       observacoesGerais: document.getElementById('waObsGerais').value.trim(),
     };
-    if(modoTeste){
-      responderAnaliseWhatsApp(a.token, respostaObj);
-    }else{
-      // sem estado local (aparelho diferente): gera um código de resposta pra devolver por WhatsApp
-      const codigoResposta = b64EncodeUnicode(JSON.stringify({ tk:a.token, ...respostaObj, respondidoEm:new Date().toISOString() }));
-      renderTelaCodigoRespostaWa(a, codigoResposta);
-    }
+    enviarRespostaAnaliseExterna(a, token, respostaObj, modoTeste);
   };
+}
+/* -- Envia a resposta: tenta automático via Apps Script (se configurado no link),
+   se não der, cai no código pra copiar/colar. -- */
+async function enviarRespostaAnaliseExterna(a, token, respostaObj, modoTeste){
+  if(modoTeste){
+    responderAnaliseWhatsApp(a.token, respostaObj);
+    return;
+  }
+  const respostaCompleta = { tk:a.token, ...respostaObj, respondidoEm:new Date().toISOString() };
+  if(a.urlAppsScript){
+    try{
+      const resp = await fetch(a.urlAppsScript, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita o preflight de CORS que o Apps Script não trata bem
+        body: JSON.stringify(respostaCompleta),
+      });
+      if(resp.ok){
+        renderConfirmacaoEnvioAutomaticoWa(a, respostaCompleta);
+        return;
+      }
+    }catch(err){ console.warn('Falha ao enviar automático pro Apps Script:', err); }
+  }
+  // sem endereço configurado, ou o envio automático falhou: cai no código pra copiar
+  const codigoResposta = b64EncodeUnicode(JSON.stringify(respostaCompleta));
+  renderTelaCodigoRespostaWa(a, codigoResposta);
+}
+function renderConfirmacaoEnvioAutomaticoWa(a, respostaCompleta){
+  document.getElementById('content').innerHTML = `
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:var(--navy-950);">BASE INTELIGENTE DE ORÇAMENTOS</div>
+    </div>
+    <div class="card" style="text-align:center;padding:40px 24px;">
+      <div style="font-size:36px;">✅</div>
+      <h3 style="margin-top:10px;">Enviado com sucesso</h3>
+      <p style="color:var(--ink-soft);font-size:13px;">Sua resposta foi enviada automaticamente. Não precisa fazer mais nada — quem te mandou esse link já vai receber a informação.</p>
+      <div style="margin-top:16px;font-size:12.5px;text-align:left;display:inline-block;">
+        <div>Referência: <strong>${a.referencia||'-'}</strong></div>
+        <div>Data: <strong>${new Date(respostaCompleta.respondidoEm).toLocaleString('pt-BR')}</strong></div>
+      </div>
+      <p style="color:var(--ink-soft);font-size:12px;margin-top:16px;">Obrigado!</p>
+    </div>`;
 }
 function renderTelaCodigoRespostaWa(a, codigo){
   document.getElementById('content').innerHTML = `
@@ -5285,7 +5372,12 @@ seedCriteriosPadrao();
   try{
     const payload = JSON.parse(b64DecodeUnicode(dadoAnalise));
     document.body.classList.add('wa-external-mode');
-    renderTelaAnaliseExterna(payload);
+    // Se esse MESMO navegador já tem essa análise salva localmente (por exemplo, você
+    // testando o link no seu próprio computador), usa o caminho direto — aprova na
+    // hora, sem pedir código. Só cai no modo "só payload" (com código de resposta)
+    // quando é de verdade outro aparelho, sem esses dados salvos.
+    const existeLocal = payload.tk && carregarAnaliseWhatsApp(payload.tk);
+    renderTelaAnaliseExterna(existeLocal ? payload.tk : payload);
   }catch(err){
     document.getElementById('content').innerHTML = `<div class="card" style="text-align:center;padding:60px 20px;"><h3>Link inválido</h3><p style="color:var(--ink-soft);">Não consegui ler os dados desse link.</p></div>`;
     document.body.classList.add('wa-external-mode');
