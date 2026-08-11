@@ -4088,15 +4088,17 @@ function b64EncodeUnicode(str){
 function b64DecodeUnicode(str){
   return decodeURIComponent(atob(str).split('').map(c=> '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));
 }
-/* -- Endereço público do sistema (ex: GitHub Pages) -- configurado uma vez, usado em todos os
-   links gerados daqui pra frente, mesmo quando você continuar trabalhando pela versão local. */
+/* -- Endereço público do sistema (ex: GitHub Pages) -- fixo no código, pra ninguém
+   apagar sem querer. Usado em todos os links gerados, mesmo trabalhando localmente. */
+const URL_PUBLICA_PADRAO = 'https://biriguialmoxarifado-eng.github.io/Base-Inteligente-Or-amento-/';
 const URL_PUBLICA_KEY = 'bio_url_publica_sistema';
-function getUrlPublicaSistema(){ return (localStorage.getItem(URL_PUBLICA_KEY) || '').trim(); }
+function getUrlPublicaSistema(){ return (localStorage.getItem(URL_PUBLICA_KEY) || '').trim() || URL_PUBLICA_PADRAO; }
 function setUrlPublicaSistema(url){ localStorage.setItem(URL_PUBLICA_KEY, url.trim()); }
 /* Endereço do Google Apps Script — recebe as aprovações feitas pelo link e devolve
-   quando o sistema perguntar. Opcional: sem isso, cai no modo "código pra colar". */
+   quando o sistema perguntar. Também fixo no código, pelo mesmo motivo. */
+const URL_APPS_SCRIPT_PADRAO = 'https://script.google.com/macros/s/AKfycbx-kOtWyiUpXXscJErdGDilM7FtRDWQcJkXhnLhJQHPQo1Gc4TcHxZ53oacJp7uf8k1ZA/exec';
 const URL_APPS_SCRIPT_KEY = 'bio_url_apps_script';
-function getUrlAppsScript(){ return (localStorage.getItem(URL_APPS_SCRIPT_KEY) || '').trim(); }
+function getUrlAppsScript(){ return (localStorage.getItem(URL_APPS_SCRIPT_KEY) || '').trim() || URL_APPS_SCRIPT_PADRAO; }
 function setUrlAppsScript(url){ localStorage.setItem(URL_APPS_SCRIPT_KEY, url.trim()); }
 /* Busca as respostas guardadas na planilha do Apps Script e registra as que faltam —
    é isso que substitui o "código pra colar" quando o Apps Script está configurado. */
@@ -4192,35 +4194,13 @@ function renderHistoricoAnalisesWhatsApp(){
   const urlAppsScriptAtual = getUrlAppsScript();
   document.getElementById('content').innerHTML = `
     <div class="phase-note">
-      <span>ℹ</span>
-      <div><strong>Módulo experimental.</strong> ${urlPublicaAtual ? `Os links gerados apontam pra <strong>${urlPublicaAtual}</strong> — funcionam em qualquer aparelho, mesmo você continuando a trabalhar por aqui, localmente.` : `Configure abaixo o endereço público do sistema (depois de hospedar no GitHub Pages) pra os links funcionarem em qualquer aparelho. Sem isso, os links só abrem neste mesmo navegador.`}</div>
+      <span>🔒</span>
+      <div><strong>Sistema configurado.</strong> Links de análise apontam pro endereço público hospedado, e as aprovações chegam automático via Apps Script. Configuração interna, não aparece editável aqui — clique em "🔄 Buscar respostas" pra atualizar.</div>
     </div>
-    <section class="block">
-      <div class="block-head"><h2>Endereço público do sistema</h2><span class="note">configure uma vez só</span></div>
-      <div class="card">
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-          <div style="flex:1;min-width:240px;">
-            <label>URL do GitHub Pages (ou onde você hospedou o sistema)</label>
-            <input type="text" id="waUrlPublica" placeholder="https://seuusuario.github.io/base-orcamentos/" value="${urlPublicaAtual}" style="width:100%;margin-top:6px;">
-          </div>
-          <button class="btn btn-primary btn-sm" id="btnSalvarUrlPublica">Salvar</button>
-        </div>
-      </div>
-    </section>
-    <section class="block">
-      <div class="block-head"><h2>Recebimento automático de aprovações (opcional)</h2><span class="note">Google Apps Script — grátis</span></div>
-      <div class="card">
-        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Configure isso pra não precisar mais copiar/colar código de aprovação — a resposta chega sozinha quando você clicar em "🔄 Buscar respostas".</div>
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-          <div style="flex:1;min-width:240px;">
-            <label>URL do Web App do Google Apps Script</label>
-            <input type="text" id="waUrlAppsScript" placeholder="https://script.google.com/macros/s/.../exec" value="${urlAppsScriptAtual}" style="width:100%;margin-top:6px;">
-          </div>
-          <button class="btn btn-primary btn-sm" id="btnSalvarUrlAppsScript">Salvar</button>
-          <button class="btn btn-accent btn-sm" id="btnBuscarRespostasWa">🔄 Buscar respostas</button>
-        </div>
-      </div>
-    </section>
+    <div class="toolbar">
+      <button class="btn btn-accent btn-sm" id="btnBuscarRespostasWa">🔄 Buscar respostas</button>
+      <div class="flex-spacer"></div>
+    </div>
     <div class="wa-kpi-strip">
       <div class="card kpi"><div class="card-tag">Links</div><div class="kpi-label">Links gerados</div><div class="kpi-value">${linksGerados}</div></div>
       <div class="card kpi"><div class="card-tag">Ativos</div><div class="kpi-label">Análises em andamento</div><div class="kpi-value blue">${emAndamento}</div></div>
@@ -4259,16 +4239,6 @@ function renderHistoricoAnalisesWhatsApp(){
       </div></div>`}
     </section>
   `;
-  document.getElementById('btnSalvarUrlPublica').onclick = ()=>{
-    setUrlPublicaSistema(document.getElementById('waUrlPublica').value);
-    toast('Endereço público salvo. Os próximos links já vão usar ele.');
-    renderHistoricoAnalisesWhatsApp();
-  };
-  document.getElementById('btnSalvarUrlAppsScript').onclick = ()=>{
-    setUrlAppsScript(document.getElementById('waUrlAppsScript').value);
-    toast('Endereço do Apps Script salvo.');
-    renderHistoricoAnalisesWhatsApp();
-  };
   document.getElementById('btnBuscarRespostasWa').onclick = ()=> buscarRespostasAppsScript();
   document.getElementById('btnNovaAnaliseWa').onclick = ()=>{ novaAnaliseWaDraft = criarRascunhoAnaliseWa(); analiseWaSubView='nova'; renderTelaAnaliseInterna(); };
   document.getElementById('btnDemoAnaliseWa').onclick = ()=> criarAnaliseDemonstracao();
