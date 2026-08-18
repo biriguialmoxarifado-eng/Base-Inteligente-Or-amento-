@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALMOXA PRO — Desktop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./desktop.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">AP</div>
+      <div class="brand-text"><div class="t1">ALMOXA PRO</div><div class="t2">Gestão de Obras</div></div>
+    </div>
+    <nav id="sidebarNav"></nav>
+    <div class="sidebar-foot">ALMOXA PRO · Desktop · Fase 1</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="tbTitle">Início</h1>
+        <div class="sub" id="tbSub"></div>
+      </div>
+      <div class="tb-right">
+        <span class="pill" id="pillDate"></span>
+        <button class="tb-icon-btn">🔔<span class="tb-badge" id="tbNotifBadge" style="display:none;"></span></button>
+      </div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+
+  <div id="toastHost"></div>
+  <div id="roleSwitchHost"></div>
+
+  <script type="module" src="./app.js"></script>
+  <script>
+    document.getElementById('pillDate').textContent = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  </script>
+</body>
+</html>
